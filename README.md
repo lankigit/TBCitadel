@@ -23,7 +23,7 @@ Open `index.html` directly in a browser.
 
 ## Deploy on GitHub Pages
 
-This repo includes `.github/workflows/deploy-pages.yml` for automatic GitHub Pages deployment (with Pages auto-enable in workflow).
+This repo includes `.github/workflows/deploy-pages.yml` for automatic GitHub Pages deployment.
 
 1. Push this repository to GitHub.
 2. In repository **Settings → Pages**, set **Source** to **GitHub Actions**.
