@@ -1,128 +1,149 @@
-const CITADEL_POWER = { 25: 12500000, 30: 24000000 };
-const STORAGE_KEY = "tb_citadel_stage_calculations_v1";
+const PRESETS = {
+  25: 12500000,
+  30: 24000000,
+};
 
-const TROOPS = [
-  { name: "Ariel", base: 210000, tier: "m8" },
-  { name: "Griffin VII", base: 16500, tier: "m7" },
-  { name: "Fire Phoenix I", base: 215000, tier: "m8" },
-  { name: "Griffin VI", base: 45000, tier: "m6" },
-  { name: "Manticore", base: 115000, tier: "m7" },
-  { name: "Vulture VII", base: 5200, tier: "m7" },
-  { name: "Vulture VI", base: 2700, tier: "m6" },
-  { name: "Vulture V", base: 1500, tier: "m5" },
-  { name: "-- Select --", base: 1, tier: "all" },
-];
+const STORAGE_KEY = "tb_citadel_saved_calculations_v1";
 
-const STAGES = [
-  { id: "wall", title: "Wall Killer", weight: 0.0006, multiplier: 2.965, losses: false },
-  { id: "first", title: "1. First Striker", weight: 0.016, multiplier: 1, losses: true },
-  { id: "second", title: "2. Second Striker", weight: 0.0018, multiplier: 1.556, losses: false },
-  { id: "third", title: "3. Third Striker", weight: 0.008, multiplier: 1, losses: false },
-  { id: "c1", title: "4. Cleanup 1", weight: 0.0034, multiplier: 1, losses: false },
-  { id: "c2", title: "5. Cleanup 2", weight: 0.09, multiplier: 1, losses: false },
-  { id: "c3", title: "6. Cleanup 3", weight: 0.16, multiplier: 1, losses: false },
-  { id: "c4", title: "7. Cleanup 4", weight: 0.28, multiplier: 1, losses: false },
-  { id: "c5", title: "8. Cleanup 5", weight: 0.22, multiplier: 1, losses: false },
-  { id: "c6", title: "9. Cleanup 6", weight: 0.22, multiplier: 1, losses: false },
-];
-
-const stagesRoot = document.querySelector("#stages");
-const template = document.querySelector("#stage-template");
-const citadelLevel = document.querySelector("#citadel-level");
-const customWrap = document.querySelector("#custom-power-wrap");
-const customPower = document.querySelector("#custom-power");
-const m89 = document.querySelector("#m89");
-const saveName = document.querySelector("#save-name");
+const form = document.querySelector("#planner-form");
+const targetLevel = document.querySelector("#target-level");
+const targetPower = document.querySelector("#target-power");
+const attackBonus = document.querySelector("#attack-bonus");
+const safetyBuffer = document.querySelector("#safety-buffer");
+const troopRows = document.querySelector("#troop-rows");
+const rowTpl = document.querySelector("#troop-row-template");
+const resultsCard = document.querySelector("#results-card");
+const resultSummary = document.querySelector("#result-summary");
+const resultTableBody = document.querySelector("#result-table tbody");
+const resultStatus = document.querySelector("#result-status");
+const saveButton = document.querySelector("#save-calc");
+const calcNameInput = document.querySelector("#calc-name");
 const savedList = document.querySelector("#saved-list");
+const quickButtons = [...document.querySelectorAll(".quick-btn")];
+const toast = document.querySelector("#toast");
 
-const stageNodes = new Map();
-let lastSnapshot = null;
+let lastCalculation = null;
+let toastTimer;
 
-function format(num) {
-  return Number(num || 0).toLocaleString();
+function fmt(number) {
+  return Number(number || 0).toLocaleString();
 }
 
-function availableTroops() {
-  if (m89.value === "yes") return TROOPS;
-  return TROOPS.filter((t) => !["m8", "m9"].includes(t.tier));
+function showToast(message) {
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.add("show");
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
-function buildStages() {
-  stagesRoot.innerHTML = "";
-  const options = availableTroops();
-
-  for (const stage of STAGES) {
-    const node = template.content.firstElementChild.cloneNode(true);
-    node.dataset.stage = stage.id;
-    node.querySelector(".stage-title").textContent = stage.title;
-
-    const troopSelect = node.querySelector("[data-field='troop']");
-    troopSelect.innerHTML = options
-      .map((troop) => `<option value="${troop.name}">${troop.name}</option>`)
-      .join("");
-
-    const healthWrap = node.querySelector("[data-role='health-wrap']");
-    const lossRow = node.querySelector("[data-role='loss-row']");
-    if (stage.losses) {
-      healthWrap.hidden = false;
-      lossRow.hidden = false;
-    }
-
-    stagesRoot.append(node);
-    stageNodes.set(stage.id, node);
+function setTargetLevel(level) {
+  targetLevel.value = level;
+  if (level in PRESETS) {
+    targetPower.value = PRESETS[level];
+    targetPower.disabled = true;
+  } else {
+    targetPower.disabled = false;
   }
+  quickButtons.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.target === level));
 }
 
-function targetPower() {
-  if (citadelLevel.value === "custom") return Number(customPower.value) || 0;
-  return CITADEL_POWER[citadelLevel.value];
+function addTroopRow(seed = { name: "", attack: 100, available: 0, lossRate: 15 }) {
+  const node = rowTpl.content.firstElementChild.cloneNode(true);
+  for (const input of node.querySelectorAll("input")) {
+    input.value = seed[input.dataset.field] ?? "";
+  }
+  node.querySelector("[data-action='remove']").addEventListener("click", () => node.remove());
+  troopRows.append(node);
 }
 
-function calculate() {
-  const power = targetPower();
-  const snapshot = {
-    level: citadelLevel.value,
-    power,
-    m89: m89.value,
-    stages: {},
-    createdAt: Date.now(),
+function getTroopsFromForm() {
+  return [...troopRows.querySelectorAll(".troop-row")]
+    .map((row) => {
+      const read = (field) => row.querySelector(`[data-field='${field}']`).value;
+      return {
+        name: read("name").trim() || "Unnamed troop",
+        attack: Number(read("attack")),
+        available: Number(read("available")),
+        lossRate: Number(read("lossRate")) / 100,
+      };
+    })
+    .filter((t) => t.attack > 0 && t.available >= 0 && t.lossRate >= 0);
+}
+
+function calculatePlan({ targetPowerValue, attackBonusPct, safetyBufferPct, troops }) {
+  const adjustedTargetAttack = Math.ceil(
+    (targetPowerValue * (1 + safetyBufferPct / 100)) / (1 + attackBonusPct / 100)
+  );
+
+  const ranked = [...troops].sort((a, b) => {
+    const aEff = a.lossRate / a.attack;
+    const bEff = b.lossRate / b.attack;
+    if (aEff !== bEff) return aEff - bEff;
+    return b.attack - a.attack;
+  });
+
+  let remaining = adjustedTargetAttack;
+  const chosen = [];
+
+  for (const troop of ranked) {
+    if (remaining <= 0) break;
+    const need = Math.ceil(remaining / troop.attack);
+    const assign = Math.min(need, troop.available);
+    if (assign <= 0) continue;
+
+    const attackContrib = assign * troop.attack;
+    const losses = Math.ceil(assign * troop.lossRate);
+    remaining -= attackContrib;
+
+    chosen.push({
+      ...troop,
+      assigned: assign,
+      attackContrib,
+      losses,
+    });
+  }
+
+  const totalAttack = chosen.reduce((s, c) => s + c.attackContrib, 0);
+  const totalTroops = chosen.reduce((s, c) => s + c.assigned, 0);
+  const totalLosses = chosen.reduce((s, c) => s + c.losses, 0);
+
+  return {
+    adjustedTargetAttack,
+    chosen,
+    totalAttack,
+    totalTroops,
+    totalLosses,
+    feasible: remaining <= 0,
+    shortfallAttack: Math.max(0, remaining),
   };
-
-  for (const stage of STAGES) {
-    const node = stageNodes.get(stage.id);
-    const troopName = node.querySelector("[data-field='troop']").value;
-    const strength = Number(node.querySelector("[data-field='strengthBonus']").value) || 0;
-    const health = Number(node.querySelector("[data-field='healthBonus']")?.value) || 0;
-    const troop = TROOPS.find((x) => x.name === troopName) || TROOPS[TROOPS.length - 1];
-
-    const effective = strength * stage.multiplier;
-    const stagePower = power * stage.weight;
-    const required = Math.ceil(stagePower / (troop.base * (1 + effective / 100)));
-    const losses = stage.losses ? Math.ceil(required * Math.max(0.05, 0.18 - health / 10000)) : 0;
-
-    node.querySelector("[data-field='effective']").textContent = `${effective.toFixed(1)}%`;
-    node.querySelector("[data-field='required']").textContent = format(required);
-    if (stage.losses) {
-      node.querySelector("[data-field='losses']").textContent = format(losses);
-    }
-
-    snapshot.stages[stage.id] = { troopName, strength, health, effective, required, losses };
-  }
-
-  lastSnapshot = snapshot;
 }
 
-function resetSelections() {
-  for (const stage of STAGES) {
-    const node = stageNodes.get(stage.id);
-    node.querySelector("[data-field='troop']").selectedIndex = 0;
-    node.querySelector("[data-field='strengthBonus']").value = 0;
-    const health = node.querySelector("[data-field='healthBonus']");
-    if (health) health.value = 0;
-    node.querySelector("[data-field='effective']").textContent = "0%";
-    node.querySelector("[data-field='required']").textContent = "0";
-    const loss = node.querySelector("[data-field='losses']");
-    if (loss) loss.textContent = "0";
+function renderResult(data) {
+  resultsCard.hidden = false;
+  resultTableBody.innerHTML = "";
+
+  resultStatus.className = `status-pill ${data.feasible ? "ok" : "warn"}`;
+  resultStatus.textContent = data.feasible ? "Target reachable" : "Insufficient troops for target";
+
+  resultSummary.innerHTML = [
+    ["Required attack", fmt(data.adjustedTargetAttack)],
+    ["Assigned attack", fmt(data.totalAttack)],
+    ["Total troops", fmt(data.totalTroops)],
+    ["Expected losses", fmt(data.totalLosses)],
+    ["Shortfall", data.feasible ? "0" : fmt(data.shortfallAttack)],
+  ]
+    .map(([label, value]) => `<div><div class='k'>${label}</div><div class='v'>${value}</div></div>`)
+    .join("");
+
+  for (const row of data.chosen) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.name}</td>
+      <td>${fmt(row.assigned)}</td>
+      <td>${fmt(row.attackContrib)}</td>
+      <td>${fmt(row.losses)}</td>
+    `;
+    resultTableBody.append(tr);
   }
 }
 
@@ -133,78 +154,178 @@ function loadSaved() {
     return [];
   }
 }
-function saveSaved(items) {
+
+function persistSaved(items) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
 function renderSaved() {
   const items = loadSaved().sort((a, b) => b.createdAt - a.createdAt);
   savedList.innerHTML = "";
-  if (!items.length) {
-    savedList.innerHTML = "<small>No saved calculations yet.</small>";
+
+  if (items.length === 0) {
+    savedList.innerHTML = `<p class='saved-meta'>No saved scenarios yet.</p>`;
     return;
   }
 
   for (const item of items) {
-    const div = document.createElement("div");
-    div.className = "saved-item";
-    div.innerHTML = `
+    const wrap = document.createElement("article");
+    wrap.className = "saved-item";
+
+    const date = new Date(item.createdAt).toLocaleString();
+    wrap.innerHTML = `
       <div class='row spread'>
         <strong>${item.name}</strong>
-        <small>${new Date(item.createdAt).toLocaleString()}</small>
+        <span class='saved-meta'>${date}</span>
       </div>
-      <small>Citadel ${item.level} · Power ${format(item.power)}</small>
-      <div class='row gap' style='margin-top:.4rem'>
-        <button data-action='load'>Load</button>
+      <div class='saved-meta top-space'>${item.inputs.targetLabel} · Required ${fmt(item.result.adjustedTargetAttack)} · Losses ${fmt(item.result.totalLosses)}</div>
+      <div class='row gap top-space'>
+        <button data-action='load' class='secondary'>Load</button>
+        <button data-action='dup' class='secondary'>Duplicate</button>
         <button data-action='delete' class='danger'>Delete</button>
       </div>
     `;
 
-    div.querySelector("[data-action='load']").addEventListener("click", () => {
-      citadelLevel.value = item.level;
-      customWrap.hidden = item.level !== "custom";
-      customPower.value = item.power;
-      m89.value = item.m89;
-      buildStages();
-
-      for (const stage of STAGES) {
-        const input = item.stages[stage.id];
-        if (!input) continue;
-        const node = stageNodes.get(stage.id);
-        node.querySelector("[data-field='troop']").value = input.troopName;
-        node.querySelector("[data-field='strengthBonus']").value = input.strength;
-        const h = node.querySelector("[data-field='healthBonus']");
-        if (h) h.value = input.health;
-      }
-      calculate();
+    wrap.querySelector("[data-action='load']").addEventListener("click", () => {
+      hydrateForm(item.inputs);
+      renderResult(item.result);
+      lastCalculation = structuredClone(item);
+      calcNameInput.value = `${item.name} copy`;
+      showToast("Scenario loaded");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
 
-    div.querySelector("[data-action='delete']").addEventListener("click", () => {
-      saveSaved(loadSaved().filter((x) => x.id !== item.id));
+    wrap.querySelector("[data-action='dup']").addEventListener("click", () => {
+      const all = loadSaved();
+      all.push({ ...item, id: crypto.randomUUID(), name: `${item.name} (copy)`, createdAt: Date.now() });
+      persistSaved(all);
       renderSaved();
+      showToast("Scenario duplicated");
     });
 
-    savedList.append(div);
+    wrap.querySelector("[data-action='delete']").addEventListener("click", () => {
+      const all = loadSaved().filter((x) => x.id !== item.id);
+      persistSaved(all);
+      renderSaved();
+      showToast("Scenario deleted");
+    });
+
+    savedList.append(wrap);
   }
 }
 
-document.querySelector("#calculate").addEventListener("click", calculate);
-document.querySelector("#reset-stage").addEventListener("click", resetSelections);
-document.querySelector("#save-calc").addEventListener("click", () => {
-  if (!lastSnapshot) return;
-  const items = loadSaved();
-  items.push({ ...lastSnapshot, id: crypto.randomUUID(), name: saveName.value.trim() || `Citadel ${lastSnapshot.level}` });
-  saveSaved(items);
+function hydrateForm(inputs) {
+  setTargetLevel(inputs.targetLevel);
+  targetPower.value = inputs.targetPower;
+  attackBonus.value = inputs.attackBonus;
+  safetyBuffer.value = inputs.safetyBuffer;
+
+  troopRows.innerHTML = "";
+  for (const troop of inputs.troops) {
+    addTroopRow({
+      name: troop.name,
+      attack: troop.attack,
+      available: troop.available,
+      lossRate: troop.lossRate * 100,
+    });
+  }
+}
+
+function gatherInputPayload() {
+  const troops = getTroopsFromForm();
+  return {
+    targetLevel: targetLevel.value,
+    targetLabel: targetLevel.value === "custom" ? "Custom target" : `Citadel ${targetLevel.value}`,
+    targetPower: Number(targetPower.value),
+    attackBonus: Number(attackBonus.value) || 0,
+    safetyBuffer: Number(safetyBuffer.value) || 0,
+    troops,
+  };
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const inputs = gatherInputPayload();
+
+  if (!inputs.targetPower || inputs.targetPower < 1) {
+    showToast("Set a valid target power");
+    targetPower.focus();
+    return;
+  }
+
+  if (inputs.troops.length === 0) {
+    showToast("Add at least one valid troop row");
+    return;
+  }
+
+  const result = calculatePlan({
+    targetPowerValue: inputs.targetPower,
+    attackBonusPct: inputs.attackBonus,
+    safetyBufferPct: inputs.safetyBuffer,
+    troops: inputs.troops,
+  });
+
+  renderResult(result);
+  lastCalculation = {
+    id: crypto.randomUUID(),
+    name: calcNameInput.value.trim() || `${inputs.targetLabel} plan`,
+    createdAt: Date.now(),
+    inputs,
+    result,
+  };
+  showToast(result.feasible ? "Plan generated" : "Plan generated with shortfall");
+});
+
+targetLevel.addEventListener("change", () => setTargetLevel(targetLevel.value));
+quickButtons.forEach((btn) => btn.addEventListener("click", () => setTargetLevel(btn.dataset.target)));
+
+document.querySelector("#add-troop").addEventListener("click", () => addTroopRow());
+
+saveButton.addEventListener("click", () => {
+  if (!lastCalculation) {
+    showToast("Run a calculation first");
+    return;
+  }
+  const all = loadSaved();
+  const name = calcNameInput.value.trim();
+  const toSave = { ...lastCalculation, id: crypto.randomUUID(), createdAt: Date.now() };
+  if (name) toSave.name = name;
+  all.push(toSave);
+  persistSaved(all);
   renderSaved();
+  showToast("Scenario saved");
 });
 
-citadelLevel.addEventListener("change", () => {
-  customWrap.hidden = citadelLevel.value !== "custom";
-});
-m89.addEventListener("change", () => {
-  buildStages();
-  resetSelections();
+document.querySelector("#export-calcs").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(loadSaved(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "tb-citadel-calculations.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("Exported JSON");
 });
 
-buildStages();
+document.querySelector("#import-calcs").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (!Array.isArray(parsed)) throw new Error("Invalid JSON format.");
+    const merged = [...loadSaved(), ...parsed].filter((item) => item && item.id && item.inputs && item.result);
+    persistSaved(merged);
+    renderSaved();
+    showToast(`Imported ${parsed.length} records`);
+  } catch (error) {
+    showToast(`Import failed: ${error.message}`);
+  } finally {
+    event.target.value = "";
+  }
+});
+
+addTroopRow({ name: "Infantry T1", attack: 100, available: 20000, lossRate: 22 });
+addTroopRow({ name: "Cavalry T1", attack: 150, available: 12000, lossRate: 18 });
+addTroopRow({ name: "Shooter T1", attack: 175, available: 9000, lossRate: 14 });
+setTargetLevel("25");
 renderSaved();
