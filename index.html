@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TB Citadel Attack Planner</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <main class="app-shell">
+      <header class="hero card">
+        <div>
+          <p class="eyebrow">Pure client-side planner</p>
+          <h1>TB Citadel Attack Planner</h1>
+          <p class="subtitle">
+            Rebuilt with a cleaner workflow: set your target, tune troop assumptions,
+            run the plan, and save scenarios in your browser.
+          </p>
+        </div>
+        <div class="hero-pills" role="list" aria-label="Feature highlights">
+          <span role="listitem">No server</span>
+          <span role="listitem">Citadel 25/30 + custom</span>
+          <span role="listitem">Save, duplicate, import/export</span>
+        </div>
+      </header>
+
+      <section class="layout-grid">
+        <article class="card">
+          <div class="section-head">
+            <h2>1) Battle setup</h2>
+            <p>Choose target and modifiers.</p>
+          </div>
+          <form id="planner-form" novalidate>
+            <div class="target-quickpick">
+              <button type="button" class="quick-btn" data-target="25">Citadel 25</button>
+              <button type="button" class="quick-btn" data-target="30">Citadel 30</button>
+              <button type="button" class="quick-btn" data-target="custom">Custom</button>
+            </div>
+
+            <div class="grid two-col">
+              <label>
+                Target
+                <select id="target-level">
+                  <option value="25">Citadel 25</option>
+                  <option value="30">Citadel 30</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+
+              <label>
+                Target defense power
+                <input id="target-power" type="number" min="1" step="1000" required />
+              </label>
+
+              <label>
+                Your attack bonus (%)
+                <input id="attack-bonus" type="number" value="0" step="0.1" />
+              </label>
+
+              <label>
+                Safety buffer (%)
+                <input id="safety-buffer" type="number" value="5" step="0.1" min="0" />
+              </label>
+            </div>
+
+            <div class="section-head compact">
+              <h2>2) Troops</h2>
+              <p>Higher attack + lower loss rate is prioritized.</p>
+            </div>
+
+            <div class="troop-header" aria-hidden="true">
+              <span>Troop</span>
+              <span>Attack</span>
+              <span>Available</span>
+              <span>Loss %</span>
+              <span></span>
+            </div>
+            <div id="troop-rows" class="troop-rows"></div>
+
+            <div class="row gap top-space">
+              <button type="button" id="add-troop" class="secondary">+ Add troop type</button>
+              <button type="submit">Calculate plan</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="card" id="results-card" hidden>
+          <div class="section-head">
+            <h2>3) Recommended plan</h2>
+            <p id="result-status" class="status-pill"></p>
+          </div>
+
+          <div id="result-summary" class="summary"></div>
+
+          <div class="table-wrap">
+            <table id="result-table">
+              <thead>
+                <tr>
+                  <th>Troop type</th>
+                  <th>Assigned</th>
+                  <th>Attack</th>
+                  <th>Expected losses</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="row gap top-space">
+            <input id="calc-name" type="text" placeholder="Scenario name (optional)" />
+            <button id="save-calc" type="button">Save scenario</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="row spread">
+          <div class="section-head compact">
+            <h2>Saved scenarios</h2>
+            <p>Stored locally in this browser.</p>
+          </div>
+          <div class="row gap">
+            <button id="export-calcs" class="secondary" type="button">Export JSON</button>
+            <label class="file-btn secondary">
+              Import JSON
+              <input id="import-calcs" type="file" accept="application/json" hidden />
+            </label>
+          </div>
+        </div>
+
+        <div id="saved-list" class="saved-list"></div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <template id="troop-row-template">
+      <div class="troop-row">
+        <input data-field="name" type="text" placeholder="Troop name" />
+        <input data-field="attack" type="number" min="1" step="1" placeholder="Attack" />
+        <input data-field="available" type="number" min="0" step="1" placeholder="Available" />
+        <input data-field="lossRate" type="number" min="0" max="100" step="0.1" placeholder="Loss %" />
+        <button type="button" data-action="remove" class="danger subtle">✕</button>
+      </div>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
