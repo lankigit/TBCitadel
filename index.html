@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Citadel Calculator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="title-wrap">
+        <h1>CITADEL CALCULATOR</h1>
+        <p>by GM-inspired layout · client-side only</p>
+      </header>
+
+      <section class="battle-layout">
+        <aside class="panel setup-panel">
+          <h2>⚙ Setup</h2>
+
+          <label>Language
+            <select id="language">
+              <option value="en">🇬🇧 English</option>
+              <option value="es">🇪🇸 Spanish</option>
+              <option value="fr">🇫🇷 French</option>
+            </select>
+          </label>
+
+          <label>Do you have M8/M9 troops?
+            <select id="m89">
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+
+          <label>Citadel level
+            <select id="citadel-level">
+              <option value="25">Elven 25</option>
+              <option value="30">Elven 30</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+
+          <label id="custom-power-wrap" hidden>Custom target power
+            <input id="custom-power" type="number" min="1" step="1000" value="24000000" />
+          </label>
+
+          <div class="row gap">
+            <button id="reset-stage" class="danger" type="button">Reset Troops Selection</button>
+            <button id="calculate" type="button">Calculate</button>
+          </div>
+        </aside>
+
+        <section id="stages" class="stages-grid"></section>
+      </section>
+
+      <section class="panel">
+        <div class="row spread">
+          <h2>Saved calculations</h2>
+          <div class="row gap">
+            <input id="save-name" type="text" placeholder="Name this calculation" />
+            <button id="save-calc" type="button">Save</button>
+          </div>
+        </div>
+        <div id="saved-list" class="saved-list"></div>
+      </section>
+
+      <template id="stage-template">
+        <article class="panel stage-card">
+          <h3 class="stage-title"></h3>
+          <label>Select troop
+            <select data-field="troop"></select>
+          </label>
+          <label data-role="health-wrap" hidden>Health bonus (%)
+            <input data-field="healthBonus" type="number" step="0.1" min="0" value="0" />
+          </label>
+          <label><span data-role="strength-label">Strength bonus (%)</span>
+            <input data-field="strengthBonus" type="number" step="0.1" min="0" value="0" />
+          </label>
+          <div class="result-box">
+            <div><span>Effective bonus</span><strong data-field="effective">0%</strong></div>
+            <div><span>Required troops</span><strong data-field="required">0</strong></div>
+            <div data-role="loss-row" hidden><span>Citadel first strike losses</span><strong data-field="losses">0</strong></div>
+          </div>
+        </article>
+      </template>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
